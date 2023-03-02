@@ -12,4 +12,4 @@ Before you try to testing these functions locally, make sure you have followed t
 
 ## Deploying to production
 
-The recommended setup is deploying these functions privately to Google Cloud Functions, and using Google Cloud Scheduler to trigger them on the desired schedule.
+The recommended setup is deploying these functions privately to Google Cloud Functions, and using Google Cloud Scheduler to trigger them on the desired schedule. You can use the [cloudbuild.yaml](https://github.com/strautomator/functions/blob/master/cloudbuild.yaml.sample) sample file as a reference.
