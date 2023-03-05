@@ -1,0 +1,26 @@
+// STRAUTOMATOR FUNCTION SETTINGS
+// These settings are applied to Google Cloud Functions only.
+
+{
+    "app": {
+        "url": "https://strautomator.com/"
+    },
+    "faq": {
+        "disabled": true
+    },
+    "github": {
+        "disabled": true
+    },
+    "maps": {
+        "disabled": true
+    },
+    "twitter": {
+        "disabled": true
+    },
+    "weather": {
+        "disabled": true
+    },
+    "functions": {
+        "batchSize": 8
+    }
+}
