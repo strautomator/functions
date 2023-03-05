@@ -97,6 +97,7 @@ export const ftpAutoUpdate = async () => {
         let totalCount = users.length
 
         // Filter users to be processed, based on their name and day of year.
+        // The idea is to process roughly half of the total users per week.
         users = users.filter((u) => (u.profile.firstName || u.profile.lastName).charCodeAt(0) % 2 == now.dayOfYear() % 2)
 
         if (users.length == 0) {
@@ -111,7 +112,10 @@ export const ftpAutoUpdate = async () => {
                 user.stravaTokens = await core.strava.refreshToken(user.stravaTokens.refreshToken, user.stravaTokens.accessToken)
             }
 
+            // Deprecated field.
+            // TODO! Remove this once all users have been updated.
             delete user["dateLastFtpUpdate"]
+
             await core.strava.ftp.processFtp(user)
         }
 
