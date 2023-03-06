@@ -55,8 +55,10 @@ export const cleanupSubscriptions = async () => {
         for (let subscription of subs) {
             const user = await core.users.getById(subscription.userId)
 
-            if (user && user.isPro) {
-                if (user.subscription.source == "paypal") {
+            if (user?.isPro) {
+                if (!user.subscription) {
+                    logger.error("F.Users.cleanupSubscriptions", `User ${user.id} ${user.displayName}`, "Missing subscription information")
+                } else if (user.subscription.source == "paypal") {
                     const paypalSub = (await core.paypal.subscriptions.getSubscription(subscription.id)) as core.PayPalSubscription
 
                     if (paypalSub.lastPayment && maxDate.isAfter(paypalSub.lastPayment.date)) {
