@@ -18,6 +18,7 @@ const notifications = require("./lib/notifications")
 const spotify = require("./lib/spotify")
 const strava = require("./lib/strava")
 const users = require("./lib/users")
+const logger = require("anyhow")
 
 // Helper to update user and activities counters.
 const updateCounters = async () => {
