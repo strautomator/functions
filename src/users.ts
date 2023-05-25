@@ -57,7 +57,7 @@ export const cleanupSubscriptions = async () => {
 
             if (user?.isPro) {
                 if (!user.subscription) {
-                    logger.error("F.Users.cleanupSubscriptions", `User ${user.id} ${user.displayName}`, "Missing subscription information")
+                    logger.error("F.Users.cleanupSubscriptions", core.logHelper.user(user), "Missing subscription information")
                 } else if (user.subscription.source == "paypal") {
                     const paypalSub = (await core.paypal.subscriptions.getSubscription(subscription.id)) as core.PayPalSubscription
 
@@ -152,14 +152,14 @@ export const disableFailingRecipes = async () => {
 
                     // Recipe does not exist any longer? Archive the stats.
                     if (!recipe && !stat.archived) {
-                        logger.warn("F.Users.disableFailingRecipes", `User ${user.id} ${user.displayName}`, `Recipe ${recipeId} does not exist`)
+                        logger.warn("F.Users.disableFailingRecipes", core.logHelper.user(user), `Recipe ${recipeId} does not exist`)
                         await core.recipes.stats.archiveStats(user, recipe)
                         continue
                     }
 
                     // Recipe already disabled? Stop here.
                     if (recipe.disabled) {
-                        logger.info("F.Users.disableFailingRecipes", `User ${user.id} ${user.displayName}`, `Recipe ${recipeId} is already disabled`)
+                        logger.info("F.Users.disableFailingRecipes", core.logHelper.user(user), `Recipe ${recipeId} is already disabled`)
                         continue
                     }
 
@@ -169,7 +169,7 @@ export const disableFailingRecipes = async () => {
 
                     // Disable the current recipe.
                     updatedUsers[user.id].recipes[recipeId].disabled = true
-                    logger.info("F.Users.disableFailingRecipes", `User ${user.id} ${user.displayName}`, `Recipe ${recipeId} disabled`)
+                    logger.info("F.Users.disableFailingRecipes", core.logHelper.user(user), `Recipe ${recipeId} disabled`)
                 } else {
                     await core.recipes.stats.deleteStats(user, recipeId)
                 }
@@ -213,7 +213,7 @@ export const resetRecipeCounters = async () => {
 /**
  * Count how many active, PRO and total users.
  */
-export const countUsers = async () => {
+export const countUsers = async (): Promise<any> => {
     logger.info("F.Counters.countUsers")
 
     try {
@@ -221,8 +221,8 @@ export const countUsers = async () => {
         const active = total - (await core.database.count("users", ["suspended", "==", true]))
         const pro = await core.database.count("users", ["isPro", "==", true])
 
-        await core.database.appState.set("stats", {users: {total: total, active: active, pro: pro}})
         logger.info("F.Counters.countUsers", `Total: ${total}`, `Active: ${active}`, `Pro: ${pro}`)
+        return {total: total, active: active, pro: pro}
     } catch (ex) {
         logger.error("F.Counters.countUsers", ex)
     }
@@ -231,16 +231,40 @@ export const countUsers = async () => {
 /**
  * Count how many subscriptions are there.
  */
-export const countSubscriptions = async () => {
+export const countSubscriptions = async (): Promise<any> => {
     logger.info("F.Counters.countSubscriptions")
 
     try {
         const total = await core.database.count("subscriptions")
         const active = await core.database.count("subscriptions", ["status", "==", "ACTIVE"])
 
-        await core.database.appState.set("stats", {subscriptions: {total: total, active: active}})
         logger.info("F.Counters.countSubscriptions", `Total: ${total}`, `Active: ${active}`)
+        return {total: total, active: active}
     } catch (ex) {
         logger.error("F.Counters.countSubscriptions", ex)
+    }
+}
+
+/**
+ * Count recipe usage details.
+ */
+export const countRecipeUsage = async (): Promise<any> => {
+    logger.info("F.Counters.countRecipeUsage")
+
+    try {
+        const recipeUsage: any = {}
+        const users = await core.users.getActive()
+
+        for (let pl of core.recipes.propertyList) {
+            recipeUsage[`condition.${pl.value}`] = _.sum(users.map((u) => Object.values(u.recipes || []).filter((r) => r.conditions.find((rc) => rc.property == pl.value)).length))
+        }
+        for (let al of core.recipes.actionList) {
+            recipeUsage[`action.${al.value}`] = _.sum(users.map((u) => Object.values(u.recipes || []).filter((r) => r.actions.find((ra) => ra.type == al.value)).length))
+        }
+
+        logger.info("F.Counters.countSubscriptions", `Counted recipe usage for ${users.length} users`)
+        return recipeUsage
+    } catch (ex) {
+        logger.error("F.Counters.countRecipeUsage", ex)
     }
 }
