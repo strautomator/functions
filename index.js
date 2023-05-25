@@ -20,12 +20,17 @@ const strava = require("./lib/strava")
 const users = require("./lib/users")
 const logger = require("anyhow")
 
-// Helper to update user and activities counters.
+// Helper to update users, activities and usage stats.
 const updateCounters = async () => {
     try {
-        await users.countUsers()
-        await users.countSubscriptions()
-        await strava.countActivities()
+        const stats = {
+            activities: await strava.countActivities(),
+            recipes: await users.countRecipeUsage(),
+            subscriptions: await users.countSubscriptions(),
+            users: await users.countUsers()
+        }
+
+        await core.database.appState.set("stats", stats)
     } catch (ex) {
         logger.warn("Functions.updateCounters", ex.message || ex.toString())
     }

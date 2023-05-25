@@ -104,15 +104,15 @@ export const cleanupOldActivities = async (): Promise<void> => {
  * Count how many activities were processed. Please note that activities are deleted after
  * some years, and these will be counted at deletion-time in the expired field (see above).
  */
-export const countActivities = async () => {
+export const countActivities = async (): Promise<any> => {
     logger.info("F.Counters.countActivities")
 
     try {
         const total = await core.database.count("activities")
         const withLinkback = await core.database.count("activities", ["linkback", "==", true])
 
-        await core.database.appState.set("stats", {activities: {total: total, withLinkback: withLinkback}})
         logger.info("F.Counters.countActivities", `Total: ${total}`, `With linkback: ${withLinkback}`)
+        return {total: total, withLinkback: withLinkback}
     } catch (ex) {
         logger.error("F.Counters.countActivities", ex)
     }
