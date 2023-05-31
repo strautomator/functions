@@ -59,6 +59,7 @@ exports.monthlyTasks = async () => {
 
     try {
         await notifications.sendEmailReminders()
+        await users.deleteArchivedStats()
     } catch (ex) {
         logger.warn("Functions.monthlyTasks", ex.message || ex.toString())
     }

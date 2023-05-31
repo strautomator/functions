@@ -105,15 +105,15 @@ export const cleanupOldActivities = async (): Promise<void> => {
  * some years, and these will be counted at deletion-time in the expired field (see above).
  */
 export const countActivities = async (): Promise<any> => {
-    logger.info("F.Counters.countActivities")
+    logger.info("F.Strava.countActivities")
 
     try {
         const total = await core.database.count("activities")
         const withLinkback = await core.database.count("activities", ["linkback", "==", true])
 
-        logger.info("F.Counters.countActivities", `Total: ${total}`, `With linkback: ${withLinkback}`)
+        logger.info("F.Strava.countActivities", `Total: ${total}`, `With linkback: ${withLinkback}`)
         return {total: total, withLinkback: withLinkback}
     } catch (ex) {
-        logger.error("F.Counters.countActivities", ex)
+        logger.error("F.Strava.countActivities", ex)
     }
 }

@@ -57,8 +57,10 @@ export const cleanupSubscriptions = async () => {
 
             if (user?.isPro) {
                 if (!user.subscription) {
-                    logger.error("F.Users.cleanupSubscriptions", core.logHelper.user(user), "Missing subscription information")
-                } else if (user.subscription.source == "paypal") {
+                    logger.warn("F.Users.cleanupSubscriptions", core.logHelper.user(user), "No subscription information on user")
+                }
+
+                if (user.subscription.source == "paypal") {
                     const paypalSub = (await core.paypal.subscriptions.getSubscription(subscription.id)) as core.PayPalSubscription
 
                     if (paypalSub.lastPayment && maxDate.isAfter(paypalSub.lastPayment.date)) {
@@ -145,15 +147,15 @@ export const disableFailingRecipes = async () => {
         for (let stat of recipeStats) {
             try {
                 const user = await core.users.getById(stat.userId)
-                const recipeId = stat.id.split("-")[1]
+                const recipeId = stat?.id.split("-")[1]
 
                 if (user) {
                     const recipe = user.recipes[recipeId]
 
                     // Recipe does not exist any longer? Archive the stats.
-                    if (!recipe && !stat.archived) {
+                    if (!recipe && !stat.dateArchived) {
                         logger.warn("F.Users.disableFailingRecipes", core.logHelper.user(user), `Recipe ${recipeId} does not exist`)
-                        await core.recipes.stats.archiveStats(user, recipe)
+                        await core.recipes.stats.archiveStats(user, recipeId)
                         continue
                     }
 
@@ -188,6 +190,19 @@ export const disableFailingRecipes = async () => {
 }
 
 /**
+ * Delete archived stats.
+ */
+export const deleteArchivedStats = async (): Promise<any> => {
+    logger.info("F.Users.deleteArchivedStats")
+
+    try {
+        await core.recipes.stats.deleteArchivedStats()
+    } catch (ex) {
+        logger.error("F.Users.deleteArchivedStats", ex)
+    }
+}
+
+/**
  * Reset recipe counters for users that have enabled this option.
  */
 export const resetRecipeCounters = async () => {
@@ -214,17 +229,17 @@ export const resetRecipeCounters = async () => {
  * Count how many active, PRO and total users.
  */
 export const countUsers = async (): Promise<any> => {
-    logger.info("F.Counters.countUsers")
+    logger.info("F.Users.countUsers")
 
     try {
         const total = await core.database.count("users")
         const active = total - (await core.database.count("users", ["suspended", "==", true]))
         const pro = await core.database.count("users", ["isPro", "==", true])
 
-        logger.info("F.Counters.countUsers", `Total: ${total}`, `Active: ${active}`, `Pro: ${pro}`)
+        logger.info("F.Users.countUsers", `Total: ${total}`, `Active: ${active}`, `Pro: ${pro}`)
         return {total: total, active: active, pro: pro}
     } catch (ex) {
-        logger.error("F.Counters.countUsers", ex)
+        logger.error("F.Users.countUsers", ex)
     }
 }
 
@@ -232,16 +247,16 @@ export const countUsers = async (): Promise<any> => {
  * Count how many subscriptions are there.
  */
 export const countSubscriptions = async (): Promise<any> => {
-    logger.info("F.Counters.countSubscriptions")
+    logger.info("F.Users.countSubscriptions")
 
     try {
         const total = await core.database.count("subscriptions")
         const active = await core.database.count("subscriptions", ["status", "==", "ACTIVE"])
 
-        logger.info("F.Counters.countSubscriptions", `Total: ${total}`, `Active: ${active}`)
+        logger.info("F.Users.countSubscriptions", `Total: ${total}`, `Active: ${active}`)
         return {total: total, active: active}
     } catch (ex) {
-        logger.error("F.Counters.countSubscriptions", ex)
+        logger.error("F.Users.countSubscriptions", ex)
     }
 }
 
@@ -249,7 +264,7 @@ export const countSubscriptions = async (): Promise<any> => {
  * Count recipe usage details.
  */
 export const countRecipeUsage = async (): Promise<any> => {
-    logger.info("F.Counters.countRecipeUsage")
+    logger.info("F.Users.countRecipeUsage")
 
     try {
         const recipeUsage: any = {}
@@ -262,9 +277,9 @@ export const countRecipeUsage = async (): Promise<any> => {
             recipeUsage[`action.${al.value}`] = _.sum(users.map((u) => Object.values(u.recipes || []).filter((r) => r.actions.find((ra) => ra.type == al.value)).length))
         }
 
-        logger.info("F.Counters.countSubscriptions", `Counted recipe usage for ${users.length} users`)
+        logger.info("F.Users.countSubscriptions", `Counted recipe usage for ${users.length} users`)
         return recipeUsage
     } catch (ex) {
-        logger.error("F.Counters.countRecipeUsage", ex)
+        logger.error("F.Users.countRecipeUsage", ex)
     }
 }
