@@ -19,8 +19,5 @@
     },
     "weather": {
         "disabled": true
-    },
-    "functions": {
-        "batchSize": 8
     }
 }
