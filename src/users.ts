@@ -85,10 +85,10 @@ export const cleanupSubscriptions = async () => {
 }
 
 /**
- * Auto-update the FTP of users that have enabled that feature.
+ * Update the FTP and fitness level of users that have enabled that feature.
  */
-export const ftpAutoUpdate = async () => {
-    logger.info("F.Users.ftpAutoUpdate.start")
+export const performanceProcess = async () => {
+    logger.info("F.Users.performanceProcess.start")
 
     try {
         const now = dayjs()
@@ -105,31 +105,79 @@ export const ftpAutoUpdate = async () => {
         users = users.filter((u) => (u.profile.firstName || u.profile.lastName).charCodeAt(0) % 2 == now.dayOfYear() % 2)
 
         if (users.length == 0) {
-            return logger.warn("F.Users.ftpAutoUpdate", "No users to be updated")
+            return logger.warn("F.Users.performanceProcess", "No users to be updated")
         }
 
-        logger.info("F.Users.ftpAutoUpdate", `Will process ${users.length} out of ${totalCount} users`)
+        logger.info("F.Users.performanceProcess", `Will process ${users.length} out of ${totalCount} users`)
 
         // Helper function to force refresh the user token (if needed) and then process the FTP.
-        const processFtp = async (user: UserData) => {
+        const processPerformance = async (user: UserData) => {
             if (now.unix() >= user.stravaTokens.expiresAt) {
                 user.stravaTokens = await core.strava.refreshToken(user.stravaTokens.refreshToken, user.stravaTokens.accessToken)
             }
 
-            // Deprecated field.
-            // TODO! Remove this once all users have been updated.
-            delete user["dateLastFtpUpdate"]
-
-            await core.strava.ftp.processFtp(user)
+            // Process the user's FTP and fitness level.
+            await core.strava.performance.processPerformance(user)
         }
 
-        // Process FTP for the relevant users. Force refresh tokens first.
+        // Process FTP for the relevant users.
         const batchSize = settings.functions.batchSize
         while (users.length) {
-            await Promise.all(users.splice(0, batchSize).map(processFtp))
+            await Promise.all(users.splice(0, batchSize).map(processPerformance))
         }
     } catch (ex) {
-        logger.error("F.Users.ftpAutoUpdate", ex)
+        logger.error("F.Users.performanceProcess", ex)
+    }
+}
+
+/**
+ * Update the fitness level of a subset of recently active users.
+ */
+export const updateFitnessLevel = async () => {
+    logger.info("F.Users.updateFitnessLevel.start")
+
+    try {
+        const now = dayjs()
+        const batchSize = settings.functions.batchSize
+        const dateFrom = now.subtract(settings.strava.fitnessLevel.weeks, "weeks").startOf("day")
+        const where = [["dateLastActivity", ">", dateFrom.toDate()]]
+
+        // Helper to fetch and set the fitness level of users.
+        const processFitnessLevel = async (user: UserData) => {
+            if (now.unix() >= user.stravaTokens.expiresAt) {
+                user.stravaTokens = await core.strava.refreshToken(user.stravaTokens.refreshToken, user.stravaTokens.accessToken)
+            }
+
+            // Check if fitness level has changed, and if so, update the database record.
+            const fitnessLevel = await core.strava.performance.estimateFitnessLevel(user)
+            if (user.fitnessLevel != fitnessLevel) {
+                user.fitnessLevel = fitnessLevel
+                await core.users.update({id: user.id, displayName: user.displayName, fitnessLevel: fitnessLevel})
+            }
+        }
+
+        // Get recently active users.
+        const users: UserData[] = await core.database.search("users", where, null, 500)
+
+        // Now filter up to 70 users that have no fitness level set and process them.
+        const allNoLevelUsers = _.remove(users, (u) => !u.fitnessLevel)
+        const noLevelUsers = _.sampleSize(allNoLevelUsers, 70)
+
+        // Finally we update the fitness level of 30 random users that didn't have their FTP updated recently,
+        // as the standard FTP update procedure already sets the fitness level as well.
+        const allRandomUsers = _.remove(users, (u) => !u.ftpStatus || dateFrom.isAfter(u.ftpStatus.dateUpdated))
+        const randomUsers = _.sampleSize(allRandomUsers, 30)
+
+        // Process all filtered users.
+        logger.info("F.Users.updateFitnessLevel", `Users to process: ${noLevelUsers.length || "none"} with no fitness level set yet, ${randomUsers.length || "none"} randomly chosen`)
+        while (noLevelUsers.length) {
+            await Promise.all(noLevelUsers.splice(0, batchSize).map(processFitnessLevel))
+        }
+        while (randomUsers.length) {
+            await Promise.all(randomUsers.splice(0, batchSize).map(processFitnessLevel))
+        }
+    } catch (ex) {
+        logger.error("F.Users.updateFitnessLevel", ex)
     }
 }
 

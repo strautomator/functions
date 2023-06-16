@@ -67,17 +67,18 @@ exports.monthlyTasks = async () => {
     return
 }
 
-// Weekly maintenance wrapper.
+// Weekend maintenance wrapper.
 exports.weekendMaintenance = async () => {
     await startupCheck()
 
     try {
         await maps.cleanup()
         await notifications.cleanup()
+        await strava.cleanupOldActivities()
         await users.cleanupIdle()
         await users.disableFailingRecipes()
         await users.cleanupSubscriptions()
-        await strava.cleanupOldActivities()
+        await users.updateFitnessLevel()
         await spotify.refreshTokens()
         await updateCounters()
     } catch (ex) {
@@ -92,7 +93,7 @@ exports.weeklyTasks = async () => {
     await startupCheck()
 
     try {
-        await users.ftpAutoUpdate()
+        await users.performanceProcess()
         await updateCounters()
     } catch (ex) {
         logger.warn("Functions.weeklyTasks", ex.message || ex.toString())
