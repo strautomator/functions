@@ -53,30 +53,34 @@ export const cleanupSubscriptions = async () => {
         // Iterate the non-active subscriptions and make sure these users have their isPro flag unset
         // in case it's been more than 6 months since the last update.
         for (let subscription of subs) {
-            const user = await core.users.getById(subscription.userId)
+            try {
+                const user = await core.users.getById(subscription.userId)
 
-            if (user?.isPro) {
-                if (!user.subscription) {
-                    logger.warn("F.Users.cleanupSubscriptions", core.logHelper.user(user), "No subscription information on user")
-                }
-
-                if (user.subscription.source == "paypal") {
-                    const paypalSub = (await core.paypal.subscriptions.getSubscription(subscription.id)) as core.PayPalSubscription
-
-                    if (paypalSub.lastPayment && maxDate.isAfter(paypalSub.lastPayment.date)) {
-                        await core.users.switchToFree(user, subscription)
+                if (user?.isPro) {
+                    if (!user.subscription) {
+                        logger.warn("F.Users.cleanupSubscriptions", core.logHelper.user(user), "No subscription information on user")
                     }
-                } else if (user.subscription.source == "github") {
-                    const githubSub = (await core.users.subscriptions.getById(user.subscription.id)) as core.GitHubSubscription
 
-                    if (githubSub && now.isAfter(githubSub.dateExpiry)) {
-                        await core.users.switchToFree(user, subscription)
+                    if (user.subscription.source == "paypal") {
+                        const paypalSub = (await core.paypal.subscriptions.getSubscription(subscription.id)) as core.PayPalSubscription
+
+                        if (paypalSub.lastPayment && maxDate.isAfter(paypalSub.lastPayment.date)) {
+                            await core.users.switchToFree(user, subscription)
+                        }
+                    } else if (user.subscription.source == "github") {
+                        const githubSub = (await core.users.subscriptions.getById(user.subscription.id)) as core.GitHubSubscription
+
+                        if (githubSub && now.isAfter(githubSub.dateExpiry)) {
+                            await core.users.switchToFree(user, subscription)
+                        }
+                    } else if (user.subscription.source == "trial" && now.isAfter(user.subscription.dateExpiry)) {
+                        await core.users.switchToFree(user)
                     }
-                } else if (user.subscription.source == "trial" && now.isAfter(user.subscription.dateExpiry)) {
-                    await core.users.switchToFree(user)
+                } else {
+                    await core.users.subscriptions.delete(subscription)
                 }
-            } else {
-                await core.users.subscriptions.delete(subscription)
+            } catch (subEx) {
+                logger.error("F.Users.cleanupSubscriptions", `Subscription ${subscription.id} - User ${subscription.userId}`, subEx)
             }
         }
     } catch (ex) {
@@ -112,12 +116,16 @@ export const performanceProcess = async () => {
 
         // Helper function to force refresh the user token (if needed) and then process the FTP.
         const processPerformance = async (user: UserData) => {
-            if (now.unix() >= user.stravaTokens.expiresAt) {
-                user.stravaTokens = await core.strava.refreshToken(user.stravaTokens.refreshToken, user.stravaTokens.accessToken)
-            }
+            try {
+                if (now.unix() >= user.stravaTokens.expiresAt) {
+                    user.stravaTokens = await core.strava.refreshToken(user.stravaTokens.refreshToken, user.stravaTokens.accessToken)
+                }
 
-            // Process the user's FTP and fitness level.
-            await core.strava.performance.processPerformance(user)
+                // Process the user's FTP and fitness level.
+                await core.strava.performance.processPerformance(user)
+            } catch (jobEx) {
+                logger.error("F.Users.performanceProcess", core.logHelper.user(user), jobEx)
+            }
         }
 
         // Process FTP for the relevant users.
@@ -144,15 +152,19 @@ export const updateFitnessLevel = async () => {
 
         // Helper to fetch and set the fitness level of users.
         const processFitnessLevel = async (user: UserData) => {
-            if (now.unix() >= user.stravaTokens.expiresAt) {
-                user.stravaTokens = await core.strava.refreshToken(user.stravaTokens.refreshToken, user.stravaTokens.accessToken)
-            }
+            try {
+                if (now.unix() >= user.stravaTokens.expiresAt) {
+                    user.stravaTokens = await core.strava.refreshToken(user.stravaTokens.refreshToken, user.stravaTokens.accessToken)
+                }
 
-            // Check if fitness level has changed, and if so, update the database record.
-            const fitnessLevel = await core.strava.performance.estimateFitnessLevel(user)
-            if (user.fitnessLevel != fitnessLevel) {
-                user.fitnessLevel = fitnessLevel
-                await core.users.update({id: user.id, displayName: user.displayName, fitnessLevel: fitnessLevel})
+                // Check if fitness level has changed, and if so, update the database record.
+                const fitnessLevel = await core.strava.performance.estimateFitnessLevel(user)
+                if (user.fitnessLevel != fitnessLevel) {
+                    user.fitnessLevel = fitnessLevel
+                    await core.users.update({id: user.id, displayName: user.displayName, fitnessLevel: fitnessLevel})
+                }
+            } catch (jobEx) {
+                logger.error("F.Users.updateFitnessLevel", core.logHelper.user(user), jobEx)
             }
         }
 
