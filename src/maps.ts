@@ -1,7 +1,7 @@
 // Strautomator Functions: Maps
 
 import core = require("strautomator-core")
-import logger = require("anyhow")
+import logger from "anyhow"
 
 /**
  * Delete expired map data from the database.

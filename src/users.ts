@@ -5,7 +5,7 @@ import core = require("strautomator-core")
 import _ from "lodash"
 import dayjs from "dayjs"
 import dayjsDayOfYear from "dayjs/plugin/dayOfYear"
-import logger = require("anyhow")
+import logger from "anyhow"
 const settings = require("setmeup").settings
 dayjs.extend(dayjsDayOfYear)
 
@@ -59,9 +59,7 @@ export const cleanupSubscriptions = async () => {
                 if (user?.isPro) {
                     if (!user.subscription) {
                         logger.warn("F.Users.cleanupSubscriptions", core.logHelper.user(user), "No subscription information on user")
-                    }
-
-                    if (user.subscription.source == "paypal") {
+                    } else if (user.subscription.source == "paypal") {
                         const paypalSub = (await core.paypal.subscriptions.getSubscription(subscription.id)) as core.PayPalSubscription
 
                         if (paypalSub.lastPayment && maxDate.isAfter(paypalSub.lastPayment.date)) {
@@ -213,9 +211,14 @@ export const disableFailingRecipes = async () => {
                     const recipe = user.recipes[recipeId]
 
                     // Recipe does not exist any longer? Archive the stats.
-                    if (!recipe && !stat.dateArchived) {
-                        logger.warn("F.Users.disableFailingRecipes", core.logHelper.user(user), `Recipe ${recipeId} does not exist`)
-                        await core.recipes.stats.archiveStats(user, recipeId)
+                    if (!recipe) {
+                        if (!stat.dateArchived) {
+                            logger.warn("F.Users.disableFailingRecipes", core.logHelper.user(user), `Recipe ${recipeId} does not exist`)
+                            await core.recipes.stats.archiveStats(user, recipeId)
+                        } else {
+                            logger.info("F.Users.disableFailingRecipes", core.logHelper.user(user), `Recipe ${recipeId} is archived`)
+                        }
+
                         continue
                     }
 
@@ -230,8 +233,12 @@ export const disableFailingRecipes = async () => {
                     }
 
                     // Disable the current recipe.
-                    updatedUsers[user.id].recipes[recipeId].disabled = true
-                    logger.info("F.Users.disableFailingRecipes", core.logHelper.user(user), `Recipe ${recipeId} disabled`)
+                    if (updatedUsers[user.id].recipes[recipeId]) {
+                        updatedUsers[user.id].recipes[recipeId].disabled = true
+                        logger.info("F.Users.disableFailingRecipes", core.logHelper.user(user), `Recipe ${recipeId} disabled`)
+                    } else {
+                        logger.warn("F.Users.disableFailingRecipes", core.logHelper.user(user), `Can't find recipe ${recipeId}`)
+                    }
                 } else {
                     await core.recipes.stats.deleteStats(user, recipeId)
                 }

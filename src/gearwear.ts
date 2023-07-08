@@ -2,7 +2,7 @@
 
 import {GearWearDbState} from "strautomator-core"
 import core = require("strautomator-core")
-import logger = require("anyhow")
+import logger from "anyhow"
 
 /**
  * Process recent Strava activities and update GearWear stats.

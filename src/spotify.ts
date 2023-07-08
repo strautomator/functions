@@ -4,7 +4,7 @@ import core = require("strautomator-core")
 import _ from "lodash"
 import dayjs from "dayjs"
 import dayjsDayOfYear from "dayjs/plugin/dayOfYear"
-import logger = require("anyhow")
+import logger from "anyhow"
 const settings = require("setmeup").settings
 dayjs.extend(dayjsDayOfYear)
 

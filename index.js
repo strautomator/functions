@@ -117,10 +117,10 @@ exports.weeklyTasksBeta = async () => {
         await gearwear.processRecentActivities()
         await users.disableFailingRecipes()
         await users.resetRecipeCounters()
-        await users.refreshSpotifyTokens()
         await maps.cleanup()
         await notifications.cleanup()
         await notifications.sendEmailReminders()
+        await spotify.refreshTokens()
         await updateCounters()
     } catch (ex) {
         logger.warn("Functions.weeklyTasksBeta", ex.message || ex.toString())

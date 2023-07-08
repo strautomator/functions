@@ -1,7 +1,7 @@
 // Strautomator Functions: Strava
 
 import core = require("strautomator-core")
-import logger = require("anyhow")
+import logger from "anyhow"
 import dayjs from "dayjs"
 const settings = require("setmeup").settings
 
@@ -91,7 +91,7 @@ export const cleanupOldActivities = async (): Promise<void> => {
         const count = await core.strava.activityProcessing.deleteProcessedActivities(null, settings.strava.processedActivities.maxAgeDays)
         const stats = await core.database.appState.get("stats")
 
-        const expiredTotal = (stats.activities.expired || 0) + count
+        const expiredTotal = (stats.activities?.expired || 0) + count
         await core.database.appState.set("stats", {activities: {expired: expiredTotal}})
 
         logger.info("F.Strava.cleanupOldActivities", `Removed ${count || "no"} activities now`, `New expired total: ${expiredTotal}`)
