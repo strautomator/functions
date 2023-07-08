@@ -8,6 +8,9 @@
     "faq": {
         "disabled": true
     },
+    "garmin": {
+        "disabled": true
+    },
     "github": {
         "disabled": true
     },
