@@ -17,9 +17,6 @@
     "maps": {
         "disabled": true
     },
-    "twitter": {
-        "disabled": true
-    },
     "weather": {
         "disabled": true
     }

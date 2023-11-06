@@ -17,6 +17,7 @@ const maps = require("./lib/maps")
 const notifications = require("./lib/notifications")
 const spotify = require("./lib/spotify")
 const strava = require("./lib/strava")
+const subscriptions = require("./lib/subscriptions")
 const users = require("./lib/users")
 const logger = require("anyhow")
 
@@ -26,8 +27,8 @@ const updateCounters = async () => {
         const stats = {
             activities: await strava.countActivities(),
             recipes: await users.countRecipeUsage(),
-            subscriptions: await users.countSubscriptions(),
-            users: await users.countUsers()
+            users: await users.countUsers(),
+            subscriptions: await subscriptions.countSubscriptions()
         }
 
         await core.database.appState.set("stats", stats)
@@ -60,6 +61,8 @@ exports.monthlyTasks = async () => {
     try {
         await notifications.sendEmailReminders()
         await users.deleteArchivedStats()
+        await subscriptions.checkGitHub()
+        await subscriptions.checkPayPal()
     } catch (ex) {
         logger.warn("Functions.monthlyTasks", ex.message || ex.toString())
     }
@@ -77,9 +80,9 @@ exports.weekendMaintenance = async () => {
         await strava.cleanupOldActivities()
         await users.cleanupIdle()
         await users.disableFailingRecipes()
-        await users.cleanupSubscriptions()
         await users.updateFitnessLevel()
         await spotify.refreshTokens()
+        await subscriptions.checkNonActive()
         await updateCounters()
     } catch (ex) {
         logger.warn("Functions.weekendMaintenance", ex.message || ex.toString())
@@ -94,6 +97,7 @@ exports.weeklyTasks = async () => {
 
     try {
         await users.performanceProcess()
+        await subscriptions.checkNonActive()
         await updateCounters()
     } catch (ex) {
         logger.warn("Functions.weeklyTasks", ex.message || ex.toString())
