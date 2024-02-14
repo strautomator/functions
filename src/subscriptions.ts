@@ -167,7 +167,7 @@ export const checkPayPal = async () => {
                 // Only check subscriptions that were created on the same month or the previous month (of any year).
                 const month = dayjs.utc(subscription.dateCreated).month()
                 if (subscription.frequency != "lifetime" && (validMonths.includes(month) || now.diff(subscription.dateCreated, "months") < 11)) {
-                    logger.info("F.Subscriptions.checkPayPal", core.logHelper.subscriptionUser(subscription), "Skipped")
+                    logger.info("F.Subscriptions.checkPayPal", core.logHelper.subscriptionUser(subscription), "Skipped (different month)")
                     continue
                 }
 
