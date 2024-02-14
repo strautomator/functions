@@ -17,6 +17,9 @@
     "maps": {
         "disabled": true
     },
+    "openai": {
+        "disabled": true
+    },
     "weather": {
         "disabled": true
     }
