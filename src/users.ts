@@ -10,7 +10,7 @@ const settings = require("setmeup").settings
 dayjs.extend(dayjsDayOfYear)
 
 /**
- * Delete idle users. PRO users will be deleted only on beta environments.
+ * Delete idle users.
  */
 export const cleanupIdle = async () => {
     logger.info("F.Users.cleanupIdle.start")
@@ -19,7 +19,7 @@ export const cleanupIdle = async () => {
 
     try {
         for (const user of idleUsers) {
-            if (user.isPro && !settings.beta.enabled) {
+            if (user.isPro) {
                 logger.info("F.Users.cleanupIdle", `Idle user is PRO: ${user.id}`)
             } else {
                 logger.info("F.Users.cleanupIdle", `Deleting idle user: ${user.id}`)
@@ -49,7 +49,7 @@ export const performanceProcess = async () => {
 
         // Filter users to be processed, based on their name and day of year.
         // The idea is to process roughly half of the total users per week.
-        users = users.filter((u) => !u.preferences.privacyMode && (u.profile.firstName || u.profile.lastName).charCodeAt(0) % 2 == now.dayOfYear() % 2)
+        users = users.filter((u) => !u.preferences.privacyMode && !u.writeSuspended && (u.profile.firstName || u.profile.lastName).charCodeAt(0) % 2 == now.dayOfYear() % 2)
 
         if (users.length == 0) {
             return logger.warn("F.Users.performanceProcess", "No users to be updated")
@@ -152,40 +152,42 @@ export const disableFailingRecipes = async () => {
                 const user = await core.users.getById(stat.userId)
                 const recipeId = stat?.id.split("-")[1]
 
-                if (user) {
-                    const recipe = user.recipes[recipeId]
-
-                    // Recipe does not exist any longer? Archive the stats.
-                    if (!recipe) {
-                        if (!stat.dateArchived) {
-                            logger.warn("F.Users.disableFailingRecipes", core.logHelper.user(user), `Recipe ${recipeId} does not exist`)
-                            await core.recipes.stats.archiveStats(user, recipeId)
-                        } else {
-                            logger.info("F.Users.disableFailingRecipes", core.logHelper.user(user), `Recipe ${recipeId} is archived`)
-                        }
-
-                        continue
-                    }
-
-                    // Recipe already disabled? Stop here.
-                    if (recipe.disabled) {
-                        logger.info("F.Users.disableFailingRecipes", core.logHelper.user(user), `Recipe ${recipeId} is already disabled`)
-                        continue
-                    }
-
-                    if (!updatedUsers[user.id]) {
-                        updatedUsers[user.id] = {id: user.id, recipes: user.recipes}
-                    }
-
-                    // Disable the current recipe.
-                    if (updatedUsers[user.id].recipes[recipeId]) {
-                        updatedUsers[user.id].recipes[recipeId].disabled = true
-                        logger.info("F.Users.disableFailingRecipes", core.logHelper.user(user), `Recipe ${recipeId} disabled`)
-                    } else {
-                        logger.warn("F.Users.disableFailingRecipes", core.logHelper.user(user), `Can't find recipe ${recipeId}`)
-                    }
-                } else {
+                // User not found? Delete stats.
+                if (!user) {
                     await core.recipes.stats.deleteStats(user, recipeId)
+                    continue
+                }
+
+                const recipe = user.recipes[recipeId]
+
+                // Recipe does not exist any longer? Archive the stats.
+                if (!recipe) {
+                    if (!stat.dateArchived) {
+                        logger.warn("F.Users.disableFailingRecipes", core.logHelper.user(user), `Recipe ${recipeId} does not exist`)
+                        await core.recipes.stats.archiveStats(user, recipeId)
+                    } else {
+                        logger.info("F.Users.disableFailingRecipes", core.logHelper.user(user), `Recipe ${recipeId} is archived`)
+                    }
+
+                    continue
+                }
+
+                // Recipe already disabled? Stop here.
+                if (recipe.disabled) {
+                    logger.info("F.Users.disableFailingRecipes", core.logHelper.user(user), `Recipe ${recipeId} is already disabled`)
+                    continue
+                }
+
+                if (!updatedUsers[user.id]) {
+                    updatedUsers[user.id] = {id: user.id, recipes: user.recipes}
+                }
+
+                // Disable the current recipe.
+                if (updatedUsers[user.id].recipes[recipeId]) {
+                    updatedUsers[user.id].recipes[recipeId].disabled = true
+                    logger.info("F.Users.disableFailingRecipes", core.logHelper.user(user), `Recipe ${recipeId} disabled`)
+                } else {
+                    logger.warn("F.Users.disableFailingRecipes", core.logHelper.user(user), `Can't find recipe ${recipeId}`)
                 }
             } catch (recipeEx) {
                 logger.error("F.Users.disableFailingRecipes", `Recipe ${stat.id}`, recipeEx)

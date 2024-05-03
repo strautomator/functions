@@ -9,6 +9,7 @@ import dayjsAdvancedFormat from "dayjs/plugin/advancedFormat"
 import dayjsLocalizedFormat from "dayjs/plugin/localizedFormat"
 import dayjsUTC from "dayjs/plugin/utc"
 import logger from "anyhow"
+const settings = require("setmeup").settings
 
 // Extends dayjs with required plugins.
 dayjs.extend(dayjsAdvancedFormat)
@@ -16,21 +17,25 @@ dayjs.extend(dayjsLocalizedFormat)
 dayjs.extend(dayjsUTC)
 
 /**
- * Generic helper method to make sure a subscription is valid.
+ * Generic helper method to make sure a subscription is still valid.
  * @param subscription Subscription data.
  * @param user User data.
  */
 const validateSubscription = async (subscription: core.BaseSubscription, user: UserData): Promise<void> => {
     const now = dayjs.utc()
 
-    // User not found? Set the subscription to expired.
+    // User not found? Delete very old subscriptions, and set recent to expired.
     if (!user) {
         logger.info("F.Subscriptions.validateSubscription", core.logHelper.subscriptionUser(subscription), "User not found")
-        if (subscription.status != "EXPIRED") {
+
+        if (dayjs(subscription.dateUpdated).add(settings.users.idleDays.default, "days").isBefore(now)) {
+            await core.subscriptions.delete(subscription)
+        } else if (subscription.status != "EXPIRED") {
             subscription.status = "EXPIRED"
             subscription.dateExpiry = now.toDate()
             subscription.pendingUpdate = true
         }
+
         return
     }
 
@@ -47,7 +52,12 @@ const validateSubscription = async (subscription: core.BaseSubscription, user: U
 
     // Subscription active but user not set to PRO? Just leave an alert.
     if (subscription.status == "ACTIVE" && !user.isPro) {
-        logger.warn("F.Subscriptions.validateSubscription", core.logHelper.subscriptionUser(subscription), "Subscription active but user not PRO, needs manual intervention")
+        logger.warn("F.Subscriptions.validateSubscription", core.logHelper.subscriptionUser(subscription), "Subscription active but user not PRO, will set to PRO now")
+        const updatedUser: Partial<UserData> = {id: user.id, displayName: user.displayName, isPro: true, subscriptionId: subscription.id}
+        if (user["subscription"] === null) {
+            updatedUser["subscription"] = FieldValue.delete() as any
+        }
+        await core.users.update(updatedUser)
     }
 }
 
@@ -77,7 +87,7 @@ export const checkNonActive = async () => {
 
                 // Clear the subscriptionId from the user if it's still pointing to this subscription.
                 const user = await core.users.getById(subscription.userId)
-                if (user.subscriptionId == subscription.id) {
+                if (user && user.subscriptionId == subscription.id) {
                     const updatedUser = {id: user.id, displayName: user.displayName, subscriptionId: FieldValue.delete() as any}
                     await core.users.update(updatedUser)
                 }
@@ -96,6 +106,30 @@ export const checkNonActive = async () => {
         await saveSubscriptions(subs)
     } catch (ex) {
         logger.error("F.Subscriptions.checkNonActive", ex)
+    }
+}
+
+/**
+ * Clear PRO users without a valid subscription reference.
+ */
+export const checkMissing = async () => {
+    logger.info("F.Subscriptions.checkMissing.start")
+
+    try {
+        const proUsers = await core.users.getPro()
+
+        for (let user of proUsers) {
+            try {
+                const subscription = user.subscriptionId ? await core.subscriptions.getById(user.subscriptionId) : null
+                if (!subscription) {
+                    await core.users.switchToFree(user)
+                }
+            } catch (userEx) {
+                logger.error("F.Subscriptions.checkMissing", core.logHelper.user(user), userEx)
+            }
+        }
+    } catch (ex) {
+        logger.error("F.Subscriptions.checkMissing", ex)
     }
 }
 
@@ -152,7 +186,6 @@ export const checkPayPal = async () => {
 
     try {
         const now = dayjs.utc()
-        const validMonths = now.month() == 0 ? [0, 11] : [now.month() - 1, now.month()]
         const subs = _.shuffle(await core.subscriptions.getAll("paypal"))
 
         // Iterate PayPal subscriptions and make sure their details are up to date.
@@ -160,18 +193,18 @@ export const checkPayPal = async () => {
             try {
                 const user = await core.users.getById(subscription.userId)
                 await validateSubscription(subscription, user)
-                if (!user.isPro) {
+                if (!user || !user.isPro) {
                     continue
                 }
 
-                // Only check subscriptions that were created on the same month or the previous month (of any year).
-                const month = dayjs.utc(subscription.dateCreated).month()
-                if (subscription.frequency != "lifetime" && (validMonths.includes(month) || now.diff(subscription.dateCreated, "months") < 11)) {
-                    logger.info("F.Subscriptions.checkPayPal", core.logHelper.subscriptionUser(subscription), "Skipped (different month)")
+                // Skip recent subscriptions.
+                if (subscription.frequency != "lifetime" && now.diff(subscription.dateCreated, "weeks") < 4) {
+                    logger.info("F.Subscriptions.checkPayPal", core.logHelper.subscriptionUser(subscription), "Skipped (too recent)")
                     continue
                 }
 
                 // Make sure subscription is in sync with live PayPal data.
+
                 const liveData = (await core.paypal.subscriptions.getSubscription(subscription.id)) as core.PayPalSubscription
                 const paypalSubscription = subscription as PayPalSubscription
 
@@ -184,16 +217,19 @@ export const checkPayPal = async () => {
                 }
 
                 // Update status if it was cancelled and subscription is not lifetime.
-                if (paypalSubscription.frequency != "lifetime" && paypalSubscription.status != liveData.status && ["SUSPENDED", "CANCELLED", "EXPIRED"].includes(liveData.status)) {
-                    paypalSubscription.status = liveData.status
-                    paypalSubscription.pendingUpdate = true
+                if (paypalSubscription.frequency != "lifetime") {
+                    if (paypalSubscription.status != liveData.status) {
+                        paypalSubscription.status = liveData.status
+                        paypalSubscription.pendingUpdate = true
+                    }
 
-                    const days = paypalSubscription.frequency == "yearly" ? 365 : 30
-                    const expiryDate = dayjs.utc(liveData.lastPayment?.date || liveData.dateUpdated).add(days, "days")
-
-                    if (now.isAfter(expiryDate)) {
-                        logger.info("F.Subscriptions.checkPayPal", core.logHelper.subscriptionUser(subscription), "Unpaid for long enough")
-                        await core.users.switchToFree(user, paypalSubscription)
+                    if (["SUSPENDED", "CANCELLED", "EXPIRED"].includes(paypalSubscription.status)) {
+                        const lastPaymentDate = dayjs.utc(liveData.lastPayment?.date || liveData.dateUpdated)
+                        const expiryDate = paypalSubscription.frequency == "monthly" ? lastPaymentDate.add(4, "weeks") : lastPaymentDate.add(11, "months")
+                        if (now.isAfter(expiryDate)) {
+                            logger.info("F.Subscriptions.checkPayPal", core.logHelper.subscriptionUser(subscription), "Unpaid subscription")
+                            await core.users.switchToFree(user, paypalSubscription)
+                        }
                     }
                 }
             } catch (subEx) {

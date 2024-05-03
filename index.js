@@ -12,6 +12,7 @@ const startupCheck = async () => {
 
 // Settings and individual function modules.
 const settings = require("setmeup").settings
+const calendar = require("./lib/calendar")
 const gearwear = require("./lib/gearwear")
 const maps = require("./lib/maps")
 const notifications = require("./lib/notifications")
@@ -54,13 +55,15 @@ exports.dailyTasks = async () => {
     return
 }
 
-// Monthly tasks (executed every first day of each month).
+// Monthly tasks (executed monthly on the 15th).
 exports.monthlyTasks = async () => {
     await startupCheck()
 
     try {
+        await calendar.cleanup()
         await notifications.sendEmailReminders()
         await users.deleteArchivedStats()
+        await subscriptions.checkMissing()
         await subscriptions.checkGitHub()
         await subscriptions.checkPayPal()
     } catch (ex) {
@@ -101,33 +104,6 @@ exports.weeklyTasks = async () => {
         await updateCounters()
     } catch (ex) {
         logger.warn("Functions.weeklyTasks", ex.message || ex.toString())
-    }
-
-    return
-}
-
-// Beta weekly tasks wrapper. This will execute as a Beta environment
-// having the $SMU_beta_enabled env variable set to 1.
-exports.weeklyTasksBeta = async () => {
-    process.env.SMU_beta_enabled = "1"
-
-    await startupCheck()
-
-    try {
-        await strava.setupWebhook()
-        await strava.cleanupCache()
-        await strava.cleanupQueuedActivities()
-        await strava.cleanupOldActivities()
-        await gearwear.processRecentActivities()
-        await users.disableFailingRecipes()
-        await users.resetRecipeCounters()
-        await maps.cleanup()
-        await notifications.cleanup()
-        await notifications.sendEmailReminders()
-        await spotify.refreshTokens()
-        await updateCounters()
-    } catch (ex) {
-        logger.warn("Functions.weeklyTasksBeta", ex.message || ex.toString())
     }
 
     return
