@@ -4,9 +4,9 @@ process.env.JSON_LOGGING = true
 
 // Check if core has started.
 const core = require("strautomator-core")
-const startupCheck = async () => {
+const startupCheck = async (enabledModules) => {
     if (!settings.app || !settings.gcp) {
-        await core.startup(true)
+        await core.startup(true, enabledModules)
     }
 }
 
@@ -20,6 +20,7 @@ const spotify = require("./lib/spotify")
 const strava = require("./lib/strava")
 const subscriptions = require("./lib/subscriptions")
 const users = require("./lib/users")
+const wahoo = require("./lib/wahoo")
 const logger = require("anyhow")
 
 // Helper to update users, activities and usage stats.
@@ -38,9 +39,21 @@ const updateCounters = async () => {
     }
 }
 
+// Hourly tasks wrapper.
+exports.hourlyTasks = async () => {
+    await startupCheck(["calendar", "komoot", "maps", "strava", "subscriptions", "users", "weather"])
+
+    try {
+        await calendar.regenerate()
+    } catch (ex) {
+        logger.warn("Functions.dailyTasks", ex.message || ex.toString())
+    }
+    return
+}
+
 // Daily tasks wrapper.
 exports.dailyTasks = async () => {
-    await startupCheck()
+    await startupCheck(["calendar", "gearwear", "komoot", "mailer", "recipes", "strava", "users"])
 
     try {
         await gearwear.processRecentActivities()
@@ -51,16 +64,14 @@ exports.dailyTasks = async () => {
     } catch (ex) {
         logger.warn("Functions.dailyTasks", ex.message || ex.toString())
     }
-
     return
 }
 
 // Monthly tasks (executed monthly on the 15th).
 exports.monthlyTasks = async () => {
-    await startupCheck()
+    await startupCheck(["calendar", "gearwear", "github", "mailer", "notifications", "strava", "subscriptions", "users"])
 
     try {
-        await calendar.cleanup()
         await notifications.sendEmailReminders()
         await users.deleteArchivedStats()
         await subscriptions.checkMissing()
@@ -69,13 +80,12 @@ exports.monthlyTasks = async () => {
     } catch (ex) {
         logger.warn("Functions.monthlyTasks", ex.message || ex.toString())
     }
-
     return
 }
 
 // Weekend maintenance wrapper.
 exports.weekendMaintenance = async () => {
-    await startupCheck()
+    await startupCheck(["calendar", "gearwear", "maps", "notifications", "spotify", "strava", "subscriptions", "users", "wahoo"])
 
     try {
         await maps.cleanup()
@@ -84,19 +94,19 @@ exports.weekendMaintenance = async () => {
         await users.cleanupIdle()
         await users.disableFailingRecipes()
         await users.updateFitnessLevel()
-        await spotify.refreshTokens()
         await subscriptions.checkNonActive()
+        await spotify.refreshTokens()
+        await wahoo.refreshTokens()
         await updateCounters()
     } catch (ex) {
         logger.warn("Functions.weekendMaintenance", ex.message || ex.toString())
     }
-
     return
 }
 
 // Weekly tasks (executed on Wednesday evening).
 exports.weeklyTasks = async () => {
-    await startupCheck()
+    await startupCheck(["github", "strava", "subscriptions", "users"])
 
     try {
         await users.performanceProcess()
@@ -105,6 +115,5 @@ exports.weeklyTasks = async () => {
     } catch (ex) {
         logger.warn("Functions.weeklyTasks", ex.message || ex.toString())
     }
-
     return
 }
