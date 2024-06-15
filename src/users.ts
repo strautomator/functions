@@ -74,7 +74,7 @@ export const performanceProcess = async () => {
         // Process FTP for the relevant users.
         const batchSize = settings.functions.batchSize
         while (users.length) {
-            await Promise.all(users.splice(0, batchSize).map(processPerformance))
+            await Promise.allSettled(users.splice(0, batchSize).map(processPerformance))
         }
     } catch (ex) {
         logger.error("F.Users.performanceProcess", ex)
@@ -126,10 +126,10 @@ export const updateFitnessLevel = async () => {
         // Process all filtered users.
         logger.info("F.Users.updateFitnessLevel", `Users to process: ${noLevelUsers.length || "none"} with no fitness level set yet, ${randomUsers.length || "none"} randomly chosen`)
         while (noLevelUsers.length) {
-            await Promise.all(noLevelUsers.splice(0, batchSize).map(processFitnessLevel))
+            await Promise.allSettled(noLevelUsers.splice(0, batchSize).map(processFitnessLevel))
         }
         while (randomUsers.length) {
-            await Promise.all(randomUsers.splice(0, batchSize).map(processFitnessLevel))
+            await Promise.allSettled(randomUsers.splice(0, batchSize).map(processFitnessLevel))
         }
     } catch (ex) {
         logger.error("F.Users.updateFitnessLevel", ex)
