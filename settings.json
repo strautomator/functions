@@ -4,23 +4,5 @@
 {
     "app": {
         "url": "https://strautomator.com/"
-    },
-    "faq": {
-        "disabled": true
-    },
-    "garmin": {
-        "disabled": true
-    },
-    "github": {
-        "disabled": true
-    },
-    "maps": {
-        "disabled": true
-    },
-    "openai": {
-        "disabled": true
-    },
-    "weather": {
-        "disabled": true
     }
 }
