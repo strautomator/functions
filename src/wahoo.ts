@@ -1,4 +1,4 @@
-// Strautomator Functions: Spotify
+// Strautomator Functions: Wahoo
 
 import core = require("strautomator-core")
 import _ from "lodash"
@@ -9,21 +9,21 @@ const settings = require("setmeup").settings
 dayjs.extend(dayjsDayOfYear)
 
 /**
- * Refresh Spotify tokens and profiles for users with expired tokens.
+ * Refresh Wahoo tokens and profiles for users with expired tokens.
  */
 export const refreshTokens = async () => {
-    logger.info("F.Spotify.refreshTokens.start")
+    logger.info("F.Wahoo.refreshTokens.start")
 
     try {
         const now = dayjs()
-        const users = await core.users.getWithSpotify()
+        const users = await core.users.getWithWahoo()
         let count = 0
 
         const refreshToken = async (user) => {
-            if (user.spotify.tokens.expiresAt <= now.unix()) {
-                const tokens = await core.spotify.refreshToken(user)
-                const profile = await core.spotify.getProfile(user, tokens)
-                await core.spotify.saveProfile(user, profile)
+            if (user.wahoo.tokens.expiresAt <= now.unix()) {
+                const tokens = await core.wahoo.refreshToken(user)
+                const profile = await core.wahoo.profiles.getProfile(user, tokens)
+                await core.wahoo.profiles.saveProfile(user, profile)
                 count++
             }
         }
@@ -34,8 +34,8 @@ export const refreshTokens = async () => {
             await Promise.allSettled(users.splice(0, batchSize).map(refreshToken))
         }
 
-        logger.info("F.Spotify.refreshTokens", `Refreshed ${count} profiles`)
+        logger.info("F.Wahoo.refreshTokens", `Refreshed ${count} profiles`)
     } catch (ex) {
-        logger.error("F.Spotify.refreshTokens", ex)
+        logger.error("F.Wahoo.refreshTokens", ex)
     }
 }
