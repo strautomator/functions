@@ -41,10 +41,11 @@ const updateCounters = async () => {
 
 // Hourly tasks wrapper.
 exports.hourlyTasks = async () => {
-    await startupCheck(["calendar", "komoot", "maps", "strava", "subscriptions", "users", "weather"])
+    await startupCheck(["calendar", "komoot", "mailer", "maps", "strava", "subscriptions", "users", "weather"])
 
     try {
         await calendar.regenerate()
+        await strava.apiCheckStatus()
     } catch (ex) {
         logger.warn("Functions.dailyTasks", ex.message || ex.toString())
     }
@@ -60,6 +61,7 @@ exports.dailyTasks = async () => {
         await strava.setupWebhook()
         await strava.cleanupQueuedActivities()
         await strava.cleanupCache()
+        await strava.apiCheckStatus()
         await users.resetRecipeCounters()
     } catch (ex) {
         logger.warn("Functions.dailyTasks", ex.message || ex.toString())
@@ -69,7 +71,7 @@ exports.dailyTasks = async () => {
 
 // Monthly tasks (executed monthly on the 15th).
 exports.monthlyTasks = async () => {
-    await startupCheck(["calendar", "gearwear", "github", "mailer", "notifications", "strava", "subscriptions", "users"])
+    await startupCheck(["calendar", "gearwear", "github", "mailer", "notifications", "paddle", "paypal", "strava", "subscriptions", "users"])
 
     try {
         await notifications.sendEmailReminders()
