@@ -35,11 +35,12 @@ export const regenerate = async () => {
 
         // Fetch pending calendars and regenerate all of them, in small batches.
         const pendingCalendars = _.shuffle(await core.calendar.getPendingUpdate())
+        const calendarCount = pendingCalendars.length
         while (pendingCalendars.length) {
             await Promise.allSettled(pendingCalendars.splice(0, settings.functions.batchSize).map(processCalendar))
         }
 
-        logger.info("F.Calendar.regenerate", `Updated ${pendingCalendars.length || "no"} calendars`)
+        logger.info("F.Calendar.regenerate", `Updated ${calendarCount || "no"} calendars`)
     } catch (ex) {
         logger.error("F.Calendar.regenerate", ex)
     }
