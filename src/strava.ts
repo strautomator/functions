@@ -1,9 +1,46 @@
 // Strautomator Functions: Strava
 
+import {FieldValue} from "@google-cloud/firestore"
 import core = require("strautomator-core")
 import logger from "anyhow"
 import dayjs from "dayjs"
+import _ from "lodash"
 const settings = require("setmeup").settings
+
+/**
+ * Check the Strava API status.
+ */
+export const apiCheckStatus = async () => {
+    logger.info("F.Strava.apiCheckStatus.start")
+
+    try {
+        let incident: any = core.strava.incident || null
+
+        try {
+            const res = await fetch("https://status.strava.com/api/v2/summary.json", {signal: AbortSignal.timeout(settings.oauth.tokenTimeout)})
+            const data = await res.json()
+
+            if (data.incidents?.length > 0) {
+                const details = _.find(data.incidents, (i) => i.impact.toLowerCase() == "critical" || i.impact.toLowerCase() == "major")
+                if (details && !details.resolved_at) {
+                    incident = details.name
+                }
+            }
+        } catch (fetchEx) {
+            logger.error("F.Strava.apiCheckStatus", "Could not fetch status from Strava", fetchEx)
+        }
+
+        if (incident) {
+            logger.info("F.Strava.apiCheckStatus", `Incident: ${incident}`)
+        } else {
+            incident = FieldValue.delete()
+        }
+
+        await core.database.appState.set("strava", {incident: incident, dateIncidentCheck: new Date()})
+    } catch (ex) {
+        logger.error("F.Strava.apiCheckStatus", ex)
+    }
+}
 
 /**
  * Refresh expired Strava access tokens.
