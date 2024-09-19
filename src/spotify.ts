@@ -16,7 +16,7 @@ export const refreshTokens = async () => {
 
     try {
         const now = dayjs()
-        const users = await core.users.getWithSpotify()
+        const users = _.shuffle(await core.users.getWithSpotify())
         let count = 0
 
         const refreshToken = async (user) => {
