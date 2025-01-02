@@ -17,12 +17,19 @@ dayjs.extend(dayjsLocalizedFormat)
 dayjs.extend(dayjsUTC)
 
 /**
+ * List of active subscriptions, will be populated only once per execution (when needed).
+ */
+let activeSubs: BaseSubscription[]
+const needsActiveSubs = async () => (activeSubs ? activeSubs : (activeSubs = await core.subscriptions.getActive()))
+
+/**
  * Generic helper method to make sure a subscription is still valid.
  * @param subscription Subscription data.
  * @param user User data.
  */
 const validateSubscription = async (subscription: core.BaseSubscription, user: UserData): Promise<void> => {
     const now = dayjs.utc()
+    const nonActiveStatus = ["SUSPENDED", "CANCELLED", "EXPIRED"]
 
     // User not found? Delete very old subscriptions, and set recent to expired.
     if (!user) {
@@ -40,7 +47,7 @@ const validateSubscription = async (subscription: core.BaseSubscription, user: U
     }
 
     // Expired but still with an active-like status? Update to EXPIRED status and switch user to free.
-    if (!["SUSPENDED", "CANCELLED", "EXPIRED"].includes(subscription.status) && subscription.dateExpiry && now.isAfter(subscription.dateExpiry)) {
+    if (!nonActiveStatus.includes(subscription.status) && subscription.dateExpiry && now.isAfter(dayjs(subscription.dateExpiry).startOf("day"))) {
         logger.info("F.Subscriptions.validateSubscription", core.logHelper.subscriptionUser(subscription), "Expired")
         subscription.status = "EXPIRED"
         subscription.pendingUpdate = true
@@ -74,10 +81,39 @@ const saveSubscriptions = async (subs: (BaseSubscription | GitHubSubscription | 
 }
 
 /**
+ * Validate expiring subscriptions.
+ */
+export const checkExpiring = async () => {
+    logger.info("F.Subscriptions.checkExpiring.start")
+
+    try {
+        const expiringSubs = await core.subscriptions.getExpiringOn(new Date())
+
+        if (expiringSubs.length == 0) {
+            logger.info("F.Subscriptions.checkExpiring.start", `Will check ${expiringSubs.length} subscriptions`)
+        }
+
+        for (let subscription of expiringSubs) {
+            try {
+                const user = await core.users.getById(subscription.userId)
+                await validateSubscription(subscription, user)
+            } catch (subEx) {
+                logger.error("F.Subscriptions.checkExpiring", core.logHelper.subscriptionUser(subscription), subEx)
+            }
+        }
+
+        await saveSubscriptions(expiringSubs)
+    } catch (ex) {
+        logger.error("F.Subscriptions.checkExpiring", ex)
+    }
+}
+
+/**
  * Validate non-active subscriptions.
  */
 export const checkNonActive = async () => {
     logger.info("F.Subscriptions.checkNonActive.start")
+    await needsActiveSubs()
 
     try {
         const danglingSubs = await core.subscriptions.getDangling()
@@ -97,7 +133,8 @@ export const checkNonActive = async () => {
         }
 
         // Iterate and validate inactive subs.
-        const subs = _.shuffle(await core.subscriptions.getNonActive())
+        const inactiveSubs = await core.subscriptions.getNonActive()
+        const subs = _.shuffle(_.remove(inactiveSubs, (i) => activeSubs.find((a) => a.userId == i.userId)))
         for (let subscription of subs) {
             const user = await core.users.getById(subscription.userId)
             await validateSubscription(subscription, user)
@@ -139,6 +176,7 @@ export const checkMissing = async () => {
  */
 export const checkGitHub = async () => {
     logger.info("F.Subscriptions.checkGitHub.start")
+    await needsActiveSubs()
 
     try {
         const now = dayjs.utc()
@@ -161,11 +199,15 @@ export const checkGitHub = async () => {
                 }
 
                 // Make sure PRO users are still active sponsors on GitHub.
-                if (liveData && !liveData.find((s) => s.id == subscription.id)) {
-                    logger.info("F.Subscriptions.checkGitHub", core.logHelper.subscriptionUser(subscription), "Not found or active on GitHub")
-                    subscription.status = "EXPIRED"
-                    subscription.pendingUpdate = true
-                    await core.users.switchToFree(user, subscription)
+                if (liveData) {
+                    const hasLive = liveData.find((s) => s.id == subscription.id)
+                    const hasActive = activeSubs.find((s) => s.userId == subscription.userId && subscription.source != "github")
+                    if (liveData && !hasLive && !hasActive) {
+                        logger.info("F.Subscriptions.checkGitHub", core.logHelper.subscriptionUser(subscription), "Not found or active on GitHub")
+                        subscription.status = "EXPIRED"
+                        subscription.pendingUpdate = true
+                        await core.users.switchToFree(user, subscription)
+                    }
                 }
             } catch (subEx) {
                 logger.error("F.Subscriptions.checkGitHub", core.logHelper.subscriptionUser(subscription), subEx)
@@ -183,6 +225,7 @@ export const checkGitHub = async () => {
  */
 export const checkPayPal = async () => {
     logger.info("F.Subscriptions.checkPayPal.start")
+    await needsActiveSubs()
 
     try {
         const now = dayjs.utc()
@@ -226,7 +269,8 @@ export const checkPayPal = async () => {
                     if (["SUSPENDED", "CANCELLED", "EXPIRED"].includes(paypalSubscription.status)) {
                         const lastPaymentDate = dayjs.utc(liveData.lastPayment?.date || liveData.dateUpdated)
                         const expiryDate = paypalSubscription.frequency == "monthly" ? lastPaymentDate.add(4, "weeks") : lastPaymentDate.add(11, "months")
-                        if (now.isAfter(expiryDate)) {
+                        const hasActive = activeSubs.find((a) => a.userId == subscription.userId)
+                        if (!hasActive && now.isAfter(expiryDate)) {
                             logger.info("F.Subscriptions.checkPayPal", core.logHelper.subscriptionUser(subscription), "Unpaid subscription")
                             await core.users.switchToFree(user, paypalSubscription)
                         }
