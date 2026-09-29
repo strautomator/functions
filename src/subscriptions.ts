@@ -133,7 +133,7 @@ export const checkNonActive = async () => {
         }
 
         // Iterate and validate inactive subs, page by page.
-        for await (const inactiveSubs of core.subscriptions.getNonActivePages()) {
+        for await (const inactiveSubs of core.subscriptions.getNonActivePaged()) {
             const subs = _.shuffle(inactiveSubs.filter((i) => activeSubs.find((a) => a.userId == i.userId)))
             for (let subscription of subs) {
                 const user = await core.users.getById(subscription.userId)
@@ -154,7 +154,7 @@ export const checkMissing = async () => {
     logger.info("F.Subscriptions.checkMissing.start")
 
     try {
-        for await (const proUsers of core.users.getProPages()) {
+        for await (const proUsers of core.users.getProPaged()) {
             for (let user of proUsers) {
                 try {
                     const subscription = user.subscriptionId ? await core.subscriptions.getById(user.subscriptionId) : null
@@ -184,7 +184,7 @@ export const checkGitHub = async () => {
         const liveData = await core.github.getActiveSponsors()
 
         // Iterate GitHub subscriptions page by page and make sure they're in sync with GitHub Sponsors.
-        for await (const page of core.subscriptions.getAllPages("github")) {
+        for await (const page of core.subscriptions.getAllPaged("github")) {
             const subs = _.shuffle(page)
             for (let subscription of subs) {
                 try {
@@ -233,7 +233,7 @@ export const checkPayPal = async () => {
     try {
         const now = dayjs.utc()
         // Iterate PayPal subscriptions page by page and make sure their details are up to date.
-        for await (const page of core.subscriptions.getAllPages("paypal")) {
+        for await (const page of core.subscriptions.getAllPaged("paypal")) {
             const subs = _.shuffle(page)
             for (let subscription of subs) {
                 try {

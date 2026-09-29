@@ -276,7 +276,7 @@ export const countRecipeUsage = async (): Promise<any> => {
         }
 
         // Count usage page by page, to avoid loading all active users at once.
-        for await (const users of core.users.getActivePages()) {
+        for await (const users of core.users.getActivePaged()) {
             for (let pl of core.recipes.propertyList) {
                 const key = `condition.${pl.value}`
                 recipeUsage[key] += _.sum(users.map((u) => Object.values(u.recipes || []).filter((r) => r.conditions.find((rc) => rc.property == pl.value)).length))
