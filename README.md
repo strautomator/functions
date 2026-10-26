@@ -1,5 +1,8 @@
 # Strautomator Functions
 
+> [!IMPORTANT]
+> The individual Strautomator repos are being merged into a new monorepo at [ramadasnet/strautomator](https://github.com/ramadasnet/strautomator). This won't affect the development or the future of Strautomator, and I'm doing it purely to simplify the management and deployment of the service. So I kindly ask everyone to avoid using this repo from now on. Best regards - Igor
+
 These are Strautomator's functions that should be set to run on a scheduled basis, and depend on the [Strautomator Core](https://github.com/strautomator/core) to work. Some of these functions are required for core features to work (ie. GearWear mileage tracking, FTP auto-updating, etc), while others are optional (Strava cache cleanup, User subscription checks, etc).
 
 They run in production via Google Cloud Functions + Cloud Scheduler, but should work just fine with other setups and environments as well.
